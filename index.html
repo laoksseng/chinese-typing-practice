@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>中文打字練習</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="practice-panel" aria-label="打字練習">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Chinese Typing Practice</p>
+            <h1>中文打字練習</h1>
+          </div>
+          <div class="timer-group" aria-label="時間設定">
+            <button class="time-option is-active" type="button" data-minutes="5">5 分鐘</button>
+            <button class="time-option" type="button" data-minutes="10">10 分鐘</button>
+            <button class="time-option" type="button" data-minutes="20">20 分鐘</button>
+            <label class="custom-time" for="customMinutes">
+              <span>自定義</span>
+              <input id="customMinutes" type="number" min="1" max="180" step="1" inputmode="numeric" placeholder="分鐘" />
+            </label>
+          </div>
+        </header>
+
+        <div class="metrics" aria-live="polite">
+          <div class="metric-card metric-time">
+            <span class="metric-label">剩餘時間</span>
+            <strong class="metric-value" id="timeLeft">05:00</strong>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">速度</span>
+            <strong class="metric-value"><span id="speed">0</span><small>字/分</small></strong>
+            <div class="metric-bar" aria-hidden="true">
+              <span id="speedBar"></span>
+            </div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">準確率</span>
+            <strong class="metric-value"><span id="accuracy">100</span><small>%</small></strong>
+            <div class="metric-bar metric-bar-accuracy" aria-hidden="true">
+              <span id="accuracyBar"></span>
+            </div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">進度</span>
+            <strong class="metric-value"><span id="progress">0</span><small>%</small></strong>
+            <div class="metric-bar metric-bar-progress" aria-hidden="true">
+              <span id="progressBar"></span>
+            </div>
+          </div>
+        </div>
+
+        <div id="promptText" class="prompt-text" aria-label="練習文章"></div>
+
+        <label class="typing-label" for="typingInput">請在下方輸入文章</label>
+        <textarea
+          id="typingInput"
+          class="typing-input"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          placeholder="按「開始練習」後開始輸入。此處已禁止貼上和拖放文字。"
+          disabled
+        ></textarea>
+
+        <div class="actions">
+          <button id="startBtn" class="primary-btn" type="button">開始練習</button>
+          <button id="resetBtn" class="ghost-btn" type="button">重新開始</button>
+        </div>
+      </section>
+
+      <aside class="source-panel" aria-label="文章導入">
+        <div class="source-header">
+          <p class="eyebrow">Text Source</p>
+          <h2>文章導入</h2>
+        </div>
+        <p id="statusText" class="status-text">請先導入或使用預設文章。</p>
+
+        <div class="tabs" role="tablist" aria-label="導入方法">
+          <button class="tab is-active" type="button" data-tab="paste">貼上文字</button>
+          <button class="tab" type="button" data-tab="file">TXT 檔案</button>
+          <button class="tab" type="button" data-tab="url">網站文章</button>
+        </div>
+
+        <section class="tab-panel is-active" data-panel="paste">
+          <label for="customText">直接貼上或輸入文章</label>
+          <textarea id="customText" class="source-textarea" placeholder="在這裡貼上自定義中文文章。"></textarea>
+          <button id="useCustomText" class="secondary-btn" type="button">使用此文章</button>
+        </section>
+
+        <section class="tab-panel" data-panel="file">
+          <label for="fileInput">導入 .txt 檔案</label>
+          <input id="fileInput" class="file-input" type="file" accept=".txt,text/plain" />
+          <p class="hint">支援 UTF-8、繁體中文和簡體中文純文字檔。</p>
+        </section>
+
+        <section class="tab-panel" data-panel="url">
+          <label for="urlInput">導入網站網址</label>
+          <div class="url-row">
+            <input id="urlInput" type="url" placeholder="例如：https://www.macaodaily.com/..." />
+            <button id="fetchUrl" class="secondary-btn" type="button">提取</button>
+          </div>
+          <p class="hint">會嘗試讀取標題與正文。若網站阻擋跨域讀取，可先複製文章到「貼上文字」。</p>
+        </section>
+
+        <div class="preview-block">
+          <div class="preview-title">
+            <span>目前文章</span>
+            <strong id="charCount">0 字</strong>
+          </div>
+          <div id="sourcePreview" class="source-preview"></div>
+        </div>
+      </aside>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
