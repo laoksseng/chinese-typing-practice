@@ -346,7 +346,8 @@ function cleanupReaderMarkdown(text) {
     .map(cleanupLine)
     .filter((line) => line && !line.includes("![Image") && !/^Title:|^URL Source:|^Published Time:/i.test(line));
 
-  return cleanArticleLines(removeRepeatedNearbyLines(trimToMessageBody(lines))).join("\n");
+  const bodyLines = hasMessageMarker(lines) ? trimToMessageBody(lines) : trimReaderWithoutMarker(lines);
+  return cleanArticleLines(removeRepeatedNearbyLines(bodyLines)).join("\n");
 }
 
 function trimToMessageBody(lines) {
@@ -368,12 +369,58 @@ function hasMessageMarker(lines) {
 
 function cleanArticleLines(lines) {
   return lines
-    .map((line) => cleanupLine(String(line || "").replace(/\s*[0-9０-９]?\s*上一篇\s+下一篇\s*[0-9０-９]?\s*$/u, "")))
+    .map((line) =>
+      cleanupLine(
+        String(line || "")
+          .replace(/\s*[0-9０-９]?\s*上一篇\s+下一篇\s*[0-9０-９]?\s*$/u, "")
+          .replace(/\s*[0-9０-９]?\s*(上一篇|下一篇)\s*[0-9０-９]?\s*$/u, "")
+      )
+    )
     .filter((line) => line && !isNavigationLine(line));
 }
 
 function isNavigationLine(line) {
-  return /^[0-9０-９\s]*上一篇\s*下一篇[0-9０-９\s]*$/u.test(line);
+  return /^[0-9０-９\s]*(上一篇\s*下一篇|上一篇|下一篇)[0-9０-９\s]*$/u.test(line);
+}
+
+function removeLeadingTitle(lines, title) {
+  const normalizedTitle = cleanupLine(title);
+  if (!normalizedTitle) return lines;
+
+  const result = [...lines];
+  while (result.length && cleanupLine(result[0]) === normalizedTitle) {
+    result.shift();
+  }
+  return result;
+}
+
+function trimReaderWithoutMarker(lines) {
+  const cleaned = cleanArticleLines(lines).filter((line) => !isBoilerplateLine(line));
+  const counts = new Map();
+  for (const line of cleaned) {
+    if (isLikelyArticleTitle(line)) counts.set(line, (counts.get(line) || 0) + 1);
+  }
+
+  let repeatedTitle = "";
+  for (const [line, count] of counts) {
+    if (count >= 2) repeatedTitle = line;
+  }
+
+  if (!repeatedTitle) return cleaned;
+
+  const lastTitleIndex = cleaned.lastIndexOf(repeatedTitle);
+  return cleaned.slice(lastTitleIndex + 1);
+}
+
+function isLikelyArticleTitle(line) {
+  return line.length >= 4 && line.length <= 40 && scoreChineseText(line) >= 4 && !/[。！？]$/.test(line);
+}
+
+function isBoilerplateLine(line) {
+  return (
+    /^第[A-Z0-9０-９]+版/.test(line) ||
+    /本版標題導航|設為首頁|返回主頁|今日日期|當前報紙日期|版面導航|放大|縮小|默认|默認/.test(line)
+  );
 }
 
 function removeRepeatedNearbyLines(lines) {
@@ -398,10 +445,11 @@ function extractMacauDailyText(doc) {
     return fallback.length >= 80 ? fallback : "";
   }
 
+  const title = extractFounderTitle(doc);
   const hasMarker = hasMessageMarker(lines);
-  const bodyLines = cleanArticleLines(trimToMessageBody(lines));
-  const title = hasMarker ? "" : extractFounderTitle(doc);
-  const text = [title, ...bodyLines].filter(Boolean).join("\n");
+  const trimmedLines = trimToMessageBody(lines);
+  const bodyLines = cleanArticleLines(hasMarker ? trimmedLines : removeLeadingTitle(trimmedLines, title));
+  const text = bodyLines.join("\n");
   return text.length >= 80 ? text : "";
 }
 
