@@ -346,11 +346,11 @@ function cleanupReaderMarkdown(text) {
     .map(cleanupLine)
     .filter((line) => line && !line.includes("![Image") && !/^Title:|^URL Source:|^Published Time:/i.test(line));
 
-  return removeRepeatedNearbyLines(trimToMessageBody(lines)).join("\n");
+  return cleanArticleLines(removeRepeatedNearbyLines(trimToMessageBody(lines))).join("\n");
 }
 
 function trimToMessageBody(lines) {
-  const bodyStart = lines.findIndex((line) => /【[^】]{0,8}消息】/.test(line));
+  const bodyStart = lines.findIndex((line) => /【[^】]{1,40}】/.test(line));
   if (bodyStart < 0) return lines;
 
   const bodyLines = lines.slice(bodyStart);
@@ -359,7 +359,21 @@ function trimToMessageBody(lines) {
 }
 
 function removeMessageMarker(line) {
-  return cleanupLine(String(line || "").replace(/^.*?【[^】]{0,8}消息】\s*/, ""));
+  return cleanupLine(String(line || "").replace(/^.*?【[^】]{1,40}】\s*/, ""));
+}
+
+function hasMessageMarker(lines) {
+  return lines.some((line) => /【[^】]{1,40}】/.test(line));
+}
+
+function cleanArticleLines(lines) {
+  return lines
+    .map((line) => cleanupLine(String(line || "").replace(/\s*[0-9０-９]?\s*上一篇\s+下一篇\s*[0-9０-９]?\s*$/u, "")))
+    .filter((line) => line && !isNavigationLine(line));
+}
+
+function isNavigationLine(line) {
+  return /^[0-9０-９\s]*上一篇\s*下一篇[0-9０-９\s]*$/u.test(line);
 }
 
 function removeRepeatedNearbyLines(lines) {
@@ -384,8 +398,9 @@ function extractMacauDailyText(doc) {
     return fallback.length >= 80 ? fallback : "";
   }
 
-  const bodyLines = trimToMessageBody(lines);
-  const title = bodyLines === lines ? extractFounderTitle(doc) : "";
+  const hasMarker = hasMessageMarker(lines);
+  const bodyLines = cleanArticleLines(trimToMessageBody(lines));
+  const title = hasMarker ? "" : extractFounderTitle(doc);
   const text = [title, ...bodyLines].filter(Boolean).join("\n");
   return text.length >= 80 ? text : "";
 }
