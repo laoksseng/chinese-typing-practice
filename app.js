@@ -249,6 +249,7 @@ async function fetchArticleFromUrl(url) {
   const urls = [
     url,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
     `https://r.jina.ai/${url}`,
   ];
   let lastError = "";
@@ -396,6 +397,9 @@ function removeLeadingTitle(lines, title) {
 
 function trimReaderWithoutMarker(lines) {
   const cleaned = cleanArticleLines(lines).filter((line) => !isBoilerplateLine(line));
+  const firstParagraphIndex = cleaned.findIndex((line) => isLikelyBodyParagraph(line));
+  if (firstParagraphIndex >= 0) return cleaned.slice(firstParagraphIndex);
+
   const counts = new Map();
   for (const line of cleaned) {
     if (isLikelyArticleTitle(line)) counts.set(line, (counts.get(line) || 0) + 1);
@@ -414,6 +418,10 @@ function trimReaderWithoutMarker(lines) {
 
 function isLikelyArticleTitle(line) {
   return line.length >= 4 && line.length <= 40 && scoreChineseText(line) >= 4 && !/[。！？]$/.test(line);
+}
+
+function isLikelyBodyParagraph(line) {
+  return line.length >= 25 && scoreChineseText(line) >= 20 && /[。！？]$/.test(line);
 }
 
 function isBoilerplateLine(line) {
