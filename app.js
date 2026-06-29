@@ -112,8 +112,7 @@ els.fetchUrl.addEventListener("click", async () => {
   setStatus("正在提取網站文章...");
 
   try {
-    const html = await fetchArticleHtml(url);
-    const article = extractArticleText(html);
+    const article = await fetchArticleFromUrl(url);
     setSourceText(article, "已從網站提取文章。");
   } catch (error) {
     setStatus(`提取失敗：${error.message}`);
@@ -246,21 +245,28 @@ function normalizeText(text) {
     .trim();
 }
 
-async function fetchArticleHtml(url) {
-  const direct = await tryFetch(url);
-  if (direct) return direct;
-
-  const proxyUrls = [
+async function fetchArticleFromUrl(url) {
+  const urls = [
+    url,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     `https://r.jina.ai/${url}`,
   ];
+  let lastError = "";
 
-  for (const proxyUrl of proxyUrls) {
-    const text = await tryFetch(proxyUrl);
-    if (text) return text;
+  for (const sourceUrl of urls) {
+    const text = await tryFetch(sourceUrl);
+    if (!text) continue;
+
+    try {
+      const article = extractArticleText(text);
+      if (article.length >= 20) return article;
+      lastError = "未能讀取足夠正文。";
+    } catch (error) {
+      lastError = error.message;
+    }
   }
 
-  throw new Error("網站可能阻擋跨域讀取，請改用貼上文字導入。");
+  throw new Error(lastError || "網站可能阻擋跨域讀取，請改用貼上文字導入。");
 }
 
 async function tryFetch(url) {
@@ -279,7 +285,9 @@ function extractArticleText(raw) {
   }
 
   if (!raw.trim().startsWith("<")) {
-    return cleanupReaderMarkdown(raw);
+    const text = cleanupReaderMarkdown(raw);
+    if (text.length < 20) throw new Error("未能讀取足夠正文。");
+    return text;
   }
 
   const doc = new DOMParser().parseFromString(raw, "text/html");
@@ -338,18 +346,20 @@ function cleanupReaderMarkdown(text) {
     .map(cleanupLine)
     .filter((line) => line && !line.includes("![Image") && !/^Title:|^URL Source:|^Published Time:/i.test(line));
 
-  return removeRepeatedNearbyLines(trimReaderLead(lines)).join("\n");
+  return removeRepeatedNearbyLines(trimToMessageBody(lines)).join("\n");
 }
 
-function trimReaderLead(lines) {
+function trimToMessageBody(lines) {
   const bodyStart = lines.findIndex((line) => /【[^】]{0,8}消息】/.test(line));
-  if (bodyStart <= 0) return lines;
+  if (bodyStart < 0) return lines;
 
-  const lead = lines
-    .slice(0, bodyStart)
-    .filter((line) => line.length <= 40 && !/[。！？]$/.test(line));
+  const bodyLines = lines.slice(bodyStart);
+  bodyLines[0] = removeMessageMarker(bodyLines[0]);
+  return bodyLines.filter(Boolean);
+}
 
-  return [...lead, ...lines.slice(bodyStart)];
+function removeMessageMarker(line) {
+  return cleanupLine(String(line || "").replace(/^.*?【[^】]{0,8}消息】\s*/, ""));
 }
 
 function removeRepeatedNearbyLines(lines) {
@@ -374,8 +384,9 @@ function extractMacauDailyText(doc) {
     return fallback.length >= 80 ? fallback : "";
   }
 
-  const title = extractFounderTitle(doc);
-  const text = [title, ...lines].filter(Boolean).join("\n");
+  const bodyLines = trimToMessageBody(lines);
+  const title = bodyLines === lines ? extractFounderTitle(doc) : "";
+  const text = [title, ...bodyLines].filter(Boolean).join("\n");
   return text.length >= 80 ? text : "";
 }
 
