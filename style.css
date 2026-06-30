@@ -510,6 +510,10 @@ button:disabled {
   transform: none;
 }
 
+#paperArticles .paper-item.is-current {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
 .paper-item small {
   display: block;
   margin-top: 2px;

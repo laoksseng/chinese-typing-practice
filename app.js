@@ -368,13 +368,14 @@ function renderPaperBrowser({ title, currentUrl, articles, pages }) {
 
   if (articles.length) {
     articles.forEach((article) => {
-      els.paperArticles.appendChild(createPaperButton(article.title, "提取此報道", async () => {
+      els.paperArticles.appendChild(createPaperButton(article.title, "提取此報道", async (button) => {
         els.fetchUrl.disabled = true;
         els.urlInput.value = article.url;
         setStatus("正在提取所選報道...");
 
         try {
           await importArticleFromUrl(article.url);
+          setCurrentPaperItem(els.paperArticles, button);
         } catch (error) {
           setStatus(`提取失敗：${error.message}`);
         } finally {
@@ -422,8 +423,14 @@ function createPaperButton(title, subtitle, onClick) {
     button.appendChild(small);
   }
 
-  button.addEventListener("click", onClick);
+  button.addEventListener("click", () => onClick(button));
   return button;
+}
+
+function setCurrentPaperItem(container, selectedButton) {
+  container.querySelectorAll(".paper-item").forEach((button) => {
+    button.classList.toggle("is-current", button === selectedButton);
+  });
 }
 
 function createPaperEmpty(text) {
