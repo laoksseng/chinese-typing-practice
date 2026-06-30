@@ -107,17 +107,18 @@ els.fileInput.addEventListener("change", async (event) => {
 });
 
 els.fetchUrl.addEventListener("click", async () => {
-  const url = els.urlInput.value.trim();
+  const url = els.urlInput.value.trim() || "https://www.macaodaily.com/";
+  els.urlInput.value = url;
   if (!isValidHttpUrl(url)) {
     setStatus("請輸入有效的 http 或 https 網址。");
     return;
   }
 
   els.fetchUrl.disabled = true;
-  setStatus(isMacauDailyIndexUrl(url) ? "正在載入電子日報..." : "正在提取網站文章...");
+  setStatus(isMacauDailyPaperUrl(url) ? "正在載入電子日報..." : "正在提取網站文章...");
 
   try {
-    if (isMacauDailyIndexUrl(url)) {
+    if (isMacauDailyPaperUrl(url)) {
       await loadPaperBrowser(url);
       setStatus("已載入電子日報。點擊報道後會自動提取正文。");
     } else {
@@ -291,25 +292,40 @@ async function importArticleFromUrl(url) {
 }
 
 async function loadPaperBrowser(url) {
-  const html = await fetchHtmlFromUrl(url);
-  const paperData = parsePaperIndex(html, url);
+  const { html, finalUrl } = await fetchHtmlFromUrl(url);
+  const paperData = parsePaperIndex(html, finalUrl);
+  els.urlInput.value = finalUrl;
   renderPaperBrowser(paperData);
   els.paperBrowser.hidden = false;
 }
 
-async function fetchHtmlFromUrl(url) {
-  const urls = [
-    url,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+async function fetchHtmlFromUrl(url, depth = 0) {
+  const sources = [
+    { sourceUrl: url, baseUrl: url },
+    { sourceUrl: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, baseUrl: url },
+    { sourceUrl: `https://corsproxy.io/?${encodeURIComponent(url)}`, baseUrl: url },
   ];
 
-  for (const sourceUrl of urls) {
+  for (const { sourceUrl, baseUrl } of sources) {
     const text = await tryFetch(sourceUrl);
-    if (isUsablePaperHtml(text)) return text;
+    const refreshUrl = findMetaRefreshUrl(text, baseUrl);
+    if (refreshUrl && depth < 3) return fetchHtmlFromUrl(refreshUrl, depth + 1);
+    if (isUsablePaperHtml(text)) return { html: text, finalUrl: baseUrl };
   }
 
   throw new Error("未能載入電子日報頁面。");
+}
+
+function findMetaRefreshUrl(text, baseUrl) {
+  const html = String(text || "");
+  const match = html.match(/http-equiv=["']?refresh["']?[^>]*content=["'][^"']*url=([^"']+)["']/i);
+  if (!match) return "";
+
+  try {
+    return new URL(match[1].trim(), baseUrl).href;
+  } catch {
+    return "";
+  }
 }
 
 function isUsablePaperHtml(text) {
@@ -436,12 +452,17 @@ function extractPaperPageTitle(doc) {
 }
 
 async function tryFetch(url) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 10000);
+
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) return "";
     return await response.text();
   } catch {
     return "";
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }
 
@@ -841,6 +862,16 @@ function isMacauDailyUrl(value) {
 function isMacauDailyIndexUrl(value) {
   if (!isMacauDailyUrl(value)) return false;
   return /\/node_\d+\.htm(?:[?#].*)?$/i.test(new URL(value).pathname);
+}
+
+function isMacauDailyHomeUrl(value) {
+  if (!isMacauDailyUrl(value)) return false;
+  const pathname = new URL(value).pathname.replace(/\/+$/, "");
+  return pathname === "";
+}
+
+function isMacauDailyPaperUrl(value) {
+  return isMacauDailyHomeUrl(value) || isMacauDailyIndexUrl(value);
 }
 
 function isMacauDailyArticleUrl(value) {

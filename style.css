@@ -583,12 +583,16 @@ button:disabled {
   }
 
   .paper-browser-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) 132px;
   }
 
   .paper-browser-grid > div {
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+  }
+
+  .paper-browser-grid > div:last-child {
     border-right: 0;
-    border-bottom: 1px solid var(--line);
   }
 
   .prompt-text {
