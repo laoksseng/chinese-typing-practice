@@ -15,6 +15,9 @@ const state = {
   composing: false,
 };
 
+const articleCache = new Map();
+const htmlCache = new Map();
+
 const els = {
   timeLeft: document.querySelector("#timeLeft"),
   speed: document.querySelector("#speed"),
@@ -262,28 +265,28 @@ function normalizeText(text) {
 }
 
 async function fetchArticleFromUrl(url) {
+  const cacheKey = normalizeUrl(url);
+  if (articleCache.has(cacheKey)) return articleCache.get(cacheKey);
+
   const urls = [
     url,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
     `https://r.jina.ai/${url}`,
   ];
-  let lastError = "";
 
-  for (const sourceUrl of urls) {
-    const text = await tryFetch(sourceUrl);
-    if (!text) continue;
+  const promise = fetchFirstValid(urls, (text) => {
+    const article = extractArticleText(text);
+    if (article.length < 20) throw new Error("未能讀取足夠正文。");
+    return article;
+  }).catch((error) => {
+    articleCache.delete(cacheKey);
+    throw error;
+  });
 
-    try {
-      const article = extractArticleText(text);
-      if (article.length >= 20) return article;
-      lastError = "未能讀取足夠正文。";
-    } catch (error) {
-      lastError = error.message;
-    }
-  }
-
-  throw new Error(lastError || "網站可能阻擋跨域讀取，請改用貼上文字導入。");
+  articleCache.set(cacheKey, promise);
+  return promise;
 }
 
 async function importArticleFromUrl(url) {
@@ -300,20 +303,31 @@ async function loadPaperBrowser(url) {
 }
 
 async function fetchHtmlFromUrl(url, depth = 0) {
+  const cacheKey = normalizeUrl(url);
+  if (htmlCache.has(cacheKey)) return htmlCache.get(cacheKey);
+
   const sources = [
     { sourceUrl: url, baseUrl: url },
     { sourceUrl: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, baseUrl: url },
     { sourceUrl: `https://corsproxy.io/?${encodeURIComponent(url)}`, baseUrl: url },
+    { sourceUrl: `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`, baseUrl: url },
   ];
 
-  for (const { sourceUrl, baseUrl } of sources) {
-    const text = await tryFetch(sourceUrl);
+  const promise = fetchFirstValid(sources, ({ text, baseUrl }) => {
     const refreshUrl = findMetaRefreshUrl(text, baseUrl);
-    if (refreshUrl && depth < 3) return fetchHtmlFromUrl(refreshUrl, depth + 1);
+    if (refreshUrl && depth < 3) return { refreshUrl };
     if (isUsablePaperHtml(text)) return { html: text, finalUrl: baseUrl };
-  }
+    throw new Error("未能載入電子日報頁面。");
+  }).then((result) => {
+    if (result.refreshUrl) return fetchHtmlFromUrl(result.refreshUrl, depth + 1);
+    return result;
+  }).catch((error) => {
+    htmlCache.delete(cacheKey);
+    throw error;
+  });
 
-  throw new Error("未能載入電子日報頁面。");
+  htmlCache.set(cacheKey, promise);
+  return promise;
 }
 
 function findMetaRefreshUrl(text, baseUrl) {
@@ -458,9 +472,37 @@ function extractPaperPageTitle(doc) {
   return [dateText, pageText].filter(Boolean).join(" ");
 }
 
+async function fetchFirstValid(items, parseResult) {
+  const pending = items.map((item) => fetchSourceItem(item, parseResult));
+  let lastError = null;
+
+  while (pending.length) {
+    const result = await Promise.race(
+      pending.map((promise, index) => promise.then((value) => ({ index, value })))
+    );
+    pending.splice(result.index, 1);
+
+    if (result.value.ok) return result.value.data;
+    lastError = result.value.error;
+  }
+
+  throw lastError || new Error("未能讀取可用內容。");
+}
+
+async function fetchSourceItem(item, parseResult) {
+  try {
+    const text = await tryFetch(typeof item === "string" ? item : item.sourceUrl);
+    if (!text) throw new Error("empty response");
+    const payload = typeof item === "string" ? text : { ...item, text };
+    return { ok: true, data: parseResult(payload) };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
 async function tryFetch(url) {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 10000);
+  const timeoutId = window.setTimeout(() => controller.abort(), 6000);
 
   try {
     const response = await fetch(url, { signal: controller.signal });
