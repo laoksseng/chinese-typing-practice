@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>中文打字練習</title>
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./style.css?v=20260630" />
   </head>
   <body>
     <main class="app-shell">
@@ -53,6 +53,14 @@
           </div>
         </div>
 
+        <div class="practice-tools" aria-label="練習顯示設定">
+          <label class="font-size-control" for="fontSizeInput">
+            <span>文章字號</span>
+            <input id="fontSizeInput" type="range" min="16" max="32" step="1" value="22" />
+            <strong id="fontSizeValue">22px</strong>
+          </label>
+        </div>
+
         <div id="promptText" class="prompt-text" aria-label="練習文章"></div>
 
         <label class="typing-label" for="typingInput">請在下方輸入文章</label>
@@ -83,7 +91,7 @@
         <div class="tabs" role="tablist" aria-label="導入方法">
           <button class="tab is-active" type="button" data-tab="paste">貼上文字</button>
           <button class="tab" type="button" data-tab="file">TXT 檔案</button>
-          <button class="tab" type="button" data-tab="url">網站文章</button>
+          <button class="tab" type="button" data-tab="url">澳門日報</button>
         </div>
 
         <section class="tab-panel is-active" data-panel="paste">
@@ -99,12 +107,12 @@
         </section>
 
         <section class="tab-panel" data-panel="url">
-          <label for="urlInput">導入網站網址</label>
+          <label for="urlInput">澳門日報網址</label>
           <div class="url-row">
-            <input id="urlInput" type="url" placeholder="留空載入最新澳門日報" />
+            <input id="urlInput" type="url" placeholder="例如：https://www.macaodaily.com/html/2026-06/29/node_2.htm" />
             <button id="fetchUrl" class="secondary-btn" type="button">載入</button>
           </div>
-          <p class="hint">留空會載入澳門日報最新電子報；點擊報道後會自動提取正文。</p>
+          <p class="hint">只支援澳門日報網址；留空會載入最新電子報，亦可貼上其他日期的電子報版面連結。</p>
           <div id="paperBrowser" class="paper-browser" hidden>
             <div class="paper-browser-title">
               <span id="paperTitle">電子日報瀏覽</span>

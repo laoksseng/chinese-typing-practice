@@ -11,6 +11,7 @@
   --right: #1f7a4d;
   --current: #f2c94c;
   --shadow: 0 18px 45px rgba(31, 41, 55, 0.12);
+  --practice-font-size: 22px;
 }
 
 * {
@@ -275,6 +276,37 @@ button:disabled {
   background: linear-gradient(90deg, #335c67, #7fa8b0);
 }
 
+.practice-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 10px;
+}
+
+.font-size-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.font-size-control span,
+.font-size-control strong {
+  white-space: nowrap;
+}
+
+.font-size-control input {
+  width: 160px;
+  accent-color: var(--accent);
+}
+
+.font-size-control strong {
+  min-width: 44px;
+  color: var(--ink);
+  text-align: right;
+}
+
 .prompt-text {
   flex: 1;
   min-height: 260px;
@@ -284,7 +316,7 @@ button:disabled {
   border-radius: 8px;
   padding: 20px;
   background: #fff;
-  font-size: clamp(1.15rem, 1.9vw, 1.55rem);
+  font-size: var(--practice-font-size);
   line-height: 2;
   word-break: break-word;
   white-space: pre-wrap;
@@ -338,7 +370,7 @@ button:disabled {
   min-height: 132px;
   resize: vertical;
   padding: 16px;
-  font-size: 1.2rem;
+  font-size: var(--practice-font-size);
   line-height: 1.8;
 }
 
@@ -601,5 +633,18 @@ button:disabled {
 
   .prompt-text {
     max-height: none;
+  }
+
+  .practice-tools {
+    justify-content: stretch;
+  }
+
+  .font-size-control {
+    width: 100%;
+  }
+
+  .font-size-control input {
+    flex: 1;
+    width: auto;
   }
 }

@@ -7,6 +7,7 @@ const defaultText =
 
 const state = {
   sourceText: normalizeText(defaultText),
+  fontSize: 22,
   durationSeconds: 5 * 60,
   secondsLeft: 5 * 60,
   started: false,
@@ -28,6 +29,8 @@ const els = {
   progressBar: document.querySelector("#progressBar"),
   promptText: document.querySelector("#promptText"),
   typingInput: document.querySelector("#typingInput"),
+  fontSizeInput: document.querySelector("#fontSizeInput"),
+  fontSizeValue: document.querySelector("#fontSizeValue"),
   startBtn: document.querySelector("#startBtn"),
   resetBtn: document.querySelector("#resetBtn"),
   statusText: document.querySelector("#statusText"),
@@ -83,6 +86,13 @@ els.customMinutes.addEventListener("blur", () => {
   updateMetrics();
 });
 
+els.fontSizeInput.addEventListener("input", () => {
+  const fontSize = Number(els.fontSizeInput.value);
+  if (!Number.isFinite(fontSize)) return;
+  state.fontSize = Math.min(32, Math.max(16, Math.round(fontSize)));
+  applyFontSize();
+});
+
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((item) => item.classList.remove("is-active"));
@@ -116,9 +126,13 @@ els.fetchUrl.addEventListener("click", async () => {
     setStatus("請輸入有效的 http 或 https 網址。");
     return;
   }
+  if (!isMacauDailyUrl(url)) {
+    setStatus("請輸入澳門日報網址，例如 https://www.macaodaily.com/html/2026-06/29/node_2.htm。");
+    return;
+  }
 
   els.fetchUrl.disabled = true;
-  setStatus(isMacauDailyPaperUrl(url) ? "正在載入電子日報..." : "正在提取網站文章...");
+  setStatus(isMacauDailyPaperUrl(url) ? "正在載入澳門日報電子報..." : "正在提取澳門日報文章...");
 
   try {
     if (isMacauDailyPaperUrl(url)) {
@@ -876,6 +890,11 @@ function updateSourcePreview() {
   renderPrompt();
 }
 
+function applyFontSize() {
+  document.documentElement.style.setProperty("--practice-font-size", `${state.fontSize}px`);
+  els.fontSizeValue.textContent = `${state.fontSize}px`;
+}
+
 function setStatus(message) {
   els.statusText.textContent = message;
 }
@@ -931,3 +950,4 @@ function isMacauDailyArticleUrl(value) {
 updateSourcePreview();
 updateTime();
 updateMetrics();
+applyFontSize();
