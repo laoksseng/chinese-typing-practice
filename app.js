@@ -325,10 +325,18 @@ async function fetchHtmlFromUrl(url) {
 
   for (const sourceUrl of urls) {
     const text = await tryFetch(sourceUrl);
-    if (text && text.trim().startsWith("<")) return text;
+    if (isUsablePaperHtml(text)) return text;
   }
 
   throw new Error("未能載入電子日報頁面。");
+}
+
+function isUsablePaperHtml(text) {
+  const html = String(text || "");
+  if (!html.trim().startsWith("<")) return false;
+  if (!/USEMAP|<map|pagepicmap|content_\d+\.htm/i.test(html)) return false;
+  if (/Markdown Content:|URL Source:/i.test(html)) return false;
+  return true;
 }
 
 function buildEmbeddablePaperPage(html, pageUrl) {
@@ -347,8 +355,8 @@ function buildEmbeddablePaperPage(html, pageUrl) {
 
   const style = doc.createElement("style");
   style.textContent = `
-    html, body { margin: 0; background: #fff; }
-    body { transform-origin: top left; }
+    html, body { margin: 0; background: #fff; min-width: 1005px; }
+    body { transform-origin: top left; zoom: 0.58; }
     a, area { cursor: pointer; }
     img { max-width: none; }
   `;
