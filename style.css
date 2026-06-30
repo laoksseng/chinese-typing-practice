@@ -421,6 +421,50 @@ button:disabled {
   min-width: 68px;
 }
 
+.paper-browser {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.paper-browser-title {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: var(--soft);
+  border-bottom: 1px solid var(--line);
+}
+
+.paper-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--ink);
+  background: transparent;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.paper-close:hover {
+  background: #e5ebef;
+}
+
+.paper-browser iframe {
+  display: block;
+  width: 100%;
+  height: 430px;
+  border: 0;
+  background: #fff;
+}
+
 .preview-block {
   margin-top: 22px;
   border-top: 1px solid var(--line);

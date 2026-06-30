@@ -36,6 +36,9 @@ const els = {
   fileInput: document.querySelector("#fileInput"),
   urlInput: document.querySelector("#urlInput"),
   fetchUrl: document.querySelector("#fetchUrl"),
+  paperBrowser: document.querySelector("#paperBrowser"),
+  paperFrame: document.querySelector("#paperFrame"),
+  closePaper: document.querySelector("#closePaper"),
 };
 
 document.querySelectorAll(".time-option").forEach((button) => {
@@ -109,11 +112,42 @@ els.fetchUrl.addEventListener("click", async () => {
   }
 
   els.fetchUrl.disabled = true;
-  setStatus("正在提取網站文章...");
+  setStatus(isMacauDailyIndexUrl(url) ? "正在載入電子日報..." : "正在提取網站文章...");
 
   try {
-    const article = await fetchArticleFromUrl(url);
-    setSourceText(article, "已從網站提取文章。");
+    if (isMacauDailyIndexUrl(url)) {
+      await loadPaperBrowser(url);
+      setStatus("已載入電子日報。點擊報道後會自動提取正文。");
+    } else {
+      await importArticleFromUrl(url);
+    }
+  } catch (error) {
+    setStatus(`處理失敗：${error.message}`);
+  } finally {
+    els.fetchUrl.disabled = false;
+  }
+});
+
+els.closePaper.addEventListener("click", () => {
+  els.paperFrame.removeAttribute("srcdoc");
+  els.paperBrowser.hidden = true;
+});
+
+window.addEventListener("message", async (event) => {
+  if (event.data?.type !== "macau-daily-link") return;
+
+  const articleUrl = resolveMacauDailyUrl(event.data.href);
+  if (!articleUrl || !isMacauDailyArticleUrl(articleUrl)) {
+    setStatus("請點擊電子日報中的報道連結。");
+    return;
+  }
+
+  els.fetchUrl.disabled = true;
+  setStatus("正在提取所選報道...");
+
+  try {
+    els.urlInput.value = articleUrl;
+    await importArticleFromUrl(articleUrl);
   } catch (error) {
     setStatus(`提取失敗：${error.message}`);
   } finally {
@@ -268,6 +302,70 @@ async function fetchArticleFromUrl(url) {
   }
 
   throw new Error(lastError || "網站可能阻擋跨域讀取，請改用貼上文字導入。");
+}
+
+async function importArticleFromUrl(url) {
+  const article = await fetchArticleFromUrl(url);
+  setSourceText(article, "已從網站提取文章。");
+}
+
+async function loadPaperBrowser(url) {
+  const html = await fetchHtmlFromUrl(url);
+  const page = buildEmbeddablePaperPage(html, url);
+  els.paperFrame.srcdoc = page;
+  els.paperBrowser.hidden = false;
+}
+
+async function fetchHtmlFromUrl(url) {
+  const urls = [
+    url,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  ];
+
+  for (const sourceUrl of urls) {
+    const text = await tryFetch(sourceUrl);
+    if (text && text.trim().startsWith("<")) return text;
+  }
+
+  throw new Error("未能載入電子日報頁面。");
+}
+
+function buildEmbeddablePaperPage(html, pageUrl) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("script").forEach((node) => node.remove());
+  doc.querySelectorAll("[onclick], [onmouseover], [onmouseout], [onload]").forEach((node) => {
+    node.removeAttribute("onclick");
+    node.removeAttribute("onmouseover");
+    node.removeAttribute("onmouseout");
+    node.removeAttribute("onload");
+  });
+
+  const base = doc.createElement("base");
+  base.href = pageUrl;
+  doc.head.prepend(base);
+
+  const style = doc.createElement("style");
+  style.textContent = `
+    html, body { margin: 0; background: #fff; }
+    body { transform-origin: top left; }
+    a, area { cursor: pointer; }
+    img { max-width: none; }
+  `;
+  doc.head.appendChild(style);
+
+  const bridge = doc.createElement("script");
+  bridge.textContent = `
+    document.addEventListener("click", function (event) {
+      var link = event.target.closest && event.target.closest("a[href], area[href]");
+      if (!link) return;
+      event.preventDefault();
+      parent.postMessage({ type: "macau-daily-link", href: link.href }, "*");
+    }, true);
+  `;
+  doc.body.appendChild(bridge);
+
+  return `<!doctype html>\n${doc.documentElement.outerHTML}`;
 }
 
 async function tryFetch(url) {
@@ -652,6 +750,34 @@ function isValidHttpUrl(value) {
   } catch {
     return false;
   }
+}
+
+function resolveMacauDailyUrl(value) {
+  try {
+    const url = new URL(value, els.urlInput.value || "https://www.macaodaily.com/");
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function isMacauDailyUrl(value) {
+  try {
+    const url = new URL(value);
+    return /(^|\.)macaodaily\.com$/i.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isMacauDailyIndexUrl(value) {
+  if (!isMacauDailyUrl(value)) return false;
+  return /\/node_\d+\.htm(?:[?#].*)?$/i.test(new URL(value).pathname);
+}
+
+function isMacauDailyArticleUrl(value) {
+  if (!isMacauDailyUrl(value)) return false;
+  return /\/content_\d+\.htm(?:[?#].*)?$/i.test(new URL(value).pathname);
 }
 
 updateSourcePreview();

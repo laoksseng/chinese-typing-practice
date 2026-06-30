@@ -101,10 +101,17 @@
         <section class="tab-panel" data-panel="url">
           <label for="urlInput">導入網站網址</label>
           <div class="url-row">
-            <input id="urlInput" type="url" placeholder="例如：https://www.macaodaily.com/..." />
-            <button id="fetchUrl" class="secondary-btn" type="button">提取</button>
+            <input id="urlInput" type="url" placeholder="例如：https://www.macaodaily.com/html/2026-06/30/node_2.htm" />
+            <button id="fetchUrl" class="secondary-btn" type="button">載入</button>
           </div>
-          <p class="hint">會嘗試讀取標題與正文。若網站阻擋跨域讀取，可先複製文章到「貼上文字」。</p>
+          <p class="hint">輸入澳門日報電子日報首頁可在下方瀏覽，點擊報道後會自動提取正文。</p>
+          <div id="paperBrowser" class="paper-browser" hidden>
+            <div class="paper-browser-title">
+              <span>電子日報瀏覽</span>
+              <button id="closePaper" class="paper-close" type="button" aria-label="關閉電子日報">×</button>
+            </div>
+            <iframe id="paperFrame" title="澳門日報電子日報"></iframe>
+          </div>
         </section>
 
         <div class="preview-block">
