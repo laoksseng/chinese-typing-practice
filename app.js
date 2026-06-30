@@ -37,7 +37,9 @@ const els = {
   urlInput: document.querySelector("#urlInput"),
   fetchUrl: document.querySelector("#fetchUrl"),
   paperBrowser: document.querySelector("#paperBrowser"),
-  paperFrame: document.querySelector("#paperFrame"),
+  paperTitle: document.querySelector("#paperTitle"),
+  paperArticles: document.querySelector("#paperArticles"),
+  paperPages: document.querySelector("#paperPages"),
   closePaper: document.querySelector("#closePaper"),
 };
 
@@ -129,30 +131,9 @@ els.fetchUrl.addEventListener("click", async () => {
 });
 
 els.closePaper.addEventListener("click", () => {
-  els.paperFrame.removeAttribute("srcdoc");
+  els.paperArticles.replaceChildren();
+  els.paperPages.replaceChildren();
   els.paperBrowser.hidden = true;
-});
-
-window.addEventListener("message", async (event) => {
-  if (event.data?.type !== "macau-daily-link") return;
-
-  const articleUrl = resolveMacauDailyUrl(event.data.href);
-  if (!articleUrl || !isMacauDailyArticleUrl(articleUrl)) {
-    setStatus("請點擊電子日報中的報道連結。");
-    return;
-  }
-
-  els.fetchUrl.disabled = true;
-  setStatus("正在提取所選報道...");
-
-  try {
-    els.urlInput.value = articleUrl;
-    await importArticleFromUrl(articleUrl);
-  } catch (error) {
-    setStatus(`提取失敗：${error.message}`);
-  } finally {
-    els.fetchUrl.disabled = false;
-  }
 });
 
 els.startBtn.addEventListener("click", startPractice);
@@ -311,8 +292,8 @@ async function importArticleFromUrl(url) {
 
 async function loadPaperBrowser(url) {
   const html = await fetchHtmlFromUrl(url);
-  const page = buildEmbeddablePaperPage(html, url);
-  els.paperFrame.srcdoc = page;
+  const paperData = parsePaperIndex(html, url);
+  renderPaperBrowser(paperData);
   els.paperBrowser.hidden = false;
 }
 
@@ -339,41 +320,119 @@ function isUsablePaperHtml(text) {
   return true;
 }
 
-function buildEmbeddablePaperPage(html, pageUrl) {
+function parsePaperIndex(html, pageUrl) {
   const doc = new DOMParser().parseFromString(html, "text/html");
-  doc.querySelectorAll("script").forEach((node) => node.remove());
-  doc.querySelectorAll("[onclick], [onmouseover], [onmouseout], [onload]").forEach((node) => {
-    node.removeAttribute("onclick");
-    node.removeAttribute("onmouseover");
-    node.removeAttribute("onmouseout");
-    node.removeAttribute("onload");
+  const articles = uniqueLinks(
+    Array.from(doc.querySelectorAll('a[href*="content_"]')).map((link) => ({
+      title: cleanupLine(link.textContent),
+      url: new URL(link.getAttribute("href"), pageUrl).href,
+    }))
+  ).filter((item) => item.title && isMacauDailyArticleUrl(item.url));
+
+  const pages = uniqueLinks(
+    Array.from(doc.querySelectorAll('a[href*="node_"]')).map((link) => ({
+      title: cleanupLine(link.textContent),
+      url: new URL(link.getAttribute("href"), pageUrl).href,
+    }))
+  ).filter((item) => item.title && isMacauDailyIndexUrl(item.url) && /^第/.test(item.title));
+  const currentPage = pages.find((page) => normalizeUrl(page.url) === normalizeUrl(pageUrl));
+  const title = currentPage?.title || extractPaperPageTitle(doc);
+
+  if (!articles.length && !pages.length) {
+    throw new Error("未能識別本版報道或版面導航。");
+  }
+
+  return { title, currentUrl: pageUrl, articles, pages };
+}
+
+function renderPaperBrowser({ title, currentUrl, articles, pages }) {
+  els.paperTitle.textContent = title || "電子日報瀏覽";
+  els.paperArticles.replaceChildren();
+  els.paperPages.replaceChildren();
+
+  if (articles.length) {
+    articles.forEach((article) => {
+      els.paperArticles.appendChild(createPaperButton(article.title, "提取此報道", async () => {
+        els.fetchUrl.disabled = true;
+        els.urlInput.value = article.url;
+        setStatus("正在提取所選報道...");
+
+        try {
+          await importArticleFromUrl(article.url);
+        } catch (error) {
+          setStatus(`提取失敗：${error.message}`);
+        } finally {
+          els.fetchUrl.disabled = false;
+        }
+      }));
+    });
+  } else {
+    els.paperArticles.appendChild(createPaperEmpty("此版沒有可提取的報道。"));
+  }
+
+  if (pages.length) {
+    pages.forEach((page) => {
+      const button = createPaperButton(page.title, "切換到此版", async () => {
+        els.fetchUrl.disabled = true;
+        els.urlInput.value = page.url;
+        setStatus("正在載入版面...");
+
+        try {
+          await loadPaperBrowser(page.url);
+          setStatus("已載入版面。點擊報道後會自動提取正文。");
+        } catch (error) {
+          setStatus(`載入失敗：${error.message}`);
+        } finally {
+          els.fetchUrl.disabled = false;
+        }
+      });
+      if (normalizeUrl(page.url) === normalizeUrl(currentUrl)) button.classList.add("is-current");
+      els.paperPages.appendChild(button);
+    });
+  } else {
+    els.paperPages.appendChild(createPaperEmpty("未找到其他版面。"));
+  }
+}
+
+function createPaperButton(title, subtitle, onClick) {
+  const button = document.createElement("button");
+  button.className = "paper-item";
+  button.type = "button";
+  button.textContent = title;
+
+  if (subtitle) {
+    const small = document.createElement("small");
+    small.textContent = subtitle;
+    button.appendChild(small);
+  }
+
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function createPaperEmpty(text) {
+  const empty = document.createElement("div");
+  empty.className = "paper-empty";
+  empty.textContent = text;
+  return empty;
+}
+
+function uniqueLinks(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = normalizeUrl(item.url);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
+}
 
-  const base = doc.createElement("base");
-  base.href = pageUrl;
-  doc.head.prepend(base);
-
-  const style = doc.createElement("style");
-  style.textContent = `
-    html, body { margin: 0; background: #fff; min-width: 1005px; }
-    body { transform-origin: top left; zoom: 0.58; }
-    a, area { cursor: pointer; }
-    img { max-width: none; }
-  `;
-  doc.head.appendChild(style);
-
-  const bridge = doc.createElement("script");
-  bridge.textContent = `
-    document.addEventListener("click", function (event) {
-      var link = event.target.closest && event.target.closest("a[href], area[href]");
-      if (!link) return;
-      event.preventDefault();
-      parent.postMessage({ type: "macau-daily-link", href: link.href }, "*");
-    }, true);
-  `;
-  doc.body.appendChild(bridge);
-
-  return `<!doctype html>\n${doc.documentElement.outerHTML}`;
+function extractPaperPageTitle(doc) {
+  const dateText = cleanupLine(doc.body?.textContent || "").match(/當前報紙日期：\s*([^\s]+年[^\s]+月[^\s]+日\s*星期\S?)/)?.[1];
+  const pageText = Array.from(doc.querySelectorAll("a"))
+    .map((link) => cleanupLine(link.textContent))
+    .find((text) => /^第[A-Z0-9０-９]+版/.test(text));
+  return [dateText, pageText].filter(Boolean).join(" ");
 }
 
 async function tryFetch(url) {
@@ -760,12 +819,13 @@ function isValidHttpUrl(value) {
   }
 }
 
-function resolveMacauDailyUrl(value) {
+function normalizeUrl(value) {
   try {
-    const url = new URL(value, els.urlInput.value || "https://www.macaodaily.com/");
+    const url = new URL(value);
+    url.hash = "";
     return url.href;
   } catch {
-    return "";
+    return String(value || "");
   }
 }
 

@@ -107,10 +107,19 @@
           <p class="hint">輸入澳門日報電子日報首頁可在下方瀏覽，點擊報道後會自動提取正文。</p>
           <div id="paperBrowser" class="paper-browser" hidden>
             <div class="paper-browser-title">
-              <span>電子日報瀏覽</span>
+              <span id="paperTitle">電子日報瀏覽</span>
               <button id="closePaper" class="paper-close" type="button" aria-label="關閉電子日報">×</button>
             </div>
-            <iframe id="paperFrame" title="澳門日報電子日報"></iframe>
+            <div class="paper-browser-grid">
+              <div>
+                <div class="paper-section-title">本版報道</div>
+                <div id="paperArticles" class="paper-list"></div>
+              </div>
+              <div>
+                <div class="paper-section-title">版面導航</div>
+                <div id="paperPages" class="paper-list paper-pages"></div>
+              </div>
+            </div>
           </div>
         </section>
 
