@@ -52,6 +52,7 @@ button {
 .app-footer {
   width: min(1440px, 100%);
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
   margin: -8px auto 0;
@@ -61,7 +62,16 @@ button {
   font-weight: 700;
 }
 
-.app-footer span + span::before {
+.app-footer a {
+  color: var(--accent-dark);
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  text-decoration: underline;
+}
+
+.app-footer > * + *::before {
   content: "·";
   margin-right: 10px;
   color: #9da7b5;
