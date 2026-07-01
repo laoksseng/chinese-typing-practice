@@ -2,6 +2,8 @@
 
 目前版本：`v1.0.1`
 
+線上 Demo：[https://laoksseng.github.io/chinese-typing-practice/](https://laoksseng.github.io/chinese-typing-practice/)
+
 一個純靜態的中文打字練習工具，支援計時練習、速度統計、準確率統計、文章進度提示，以及自定義練習文章導入。
 
 ## 功能特色
