@@ -42,12 +42,29 @@ button {
 
 .app-shell {
   width: min(1440px, 100%);
-  min-height: 100vh;
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 390px;
   gap: 24px;
   padding: 24px;
+}
+
+.app-footer {
+  width: min(1440px, 100%);
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: -8px auto 0;
+  padding: 0 24px 18px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.app-footer span + span::before {
+  content: "·";
+  margin-right: 10px;
+  color: #9da7b5;
 }
 
 .practice-panel,
@@ -615,6 +632,10 @@ button:disabled {
   .app-shell {
     padding: 12px;
     gap: 12px;
+  }
+
+  .app-footer {
+    padding: 0 12px 14px;
   }
 
   .practice-panel,

@@ -5,6 +5,8 @@ const defaultText =
 
 根據中華人民共和國憲法，全國人民代表大會特制定中華人民共和國澳門特別行政區基本法，規定澳門特別行政區實行的制度，以保障國家對澳門的基本方針政策的實施。`;
 
+const APP_VERSION = "v1.0.0";
+
 const state = {
   sourceText: normalizeText(defaultText),
   fontSize: 22,
@@ -48,6 +50,7 @@ const els = {
   paperArticles: document.querySelector("#paperArticles"),
   paperPages: document.querySelector("#paperPages"),
   closePaper: document.querySelector("#closePaper"),
+  appVersion: document.querySelector("#appVersion"),
 };
 
 document.querySelectorAll(".time-option").forEach((button) => {
@@ -897,6 +900,11 @@ function applyFontSize() {
   els.fontSizeValue.textContent = `${state.fontSize}px`;
 }
 
+function renderAppVersion() {
+  els.appVersion.textContent = APP_VERSION;
+  document.documentElement.dataset.version = APP_VERSION;
+}
+
 function setStatus(message) {
   els.statusText.textContent = message;
 }
@@ -953,3 +961,4 @@ updateSourcePreview();
 updateTime();
 updateMetrics();
 applyFontSize();
+renderAppVersion();
