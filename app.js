@@ -5,7 +5,7 @@ const defaultText =
 
 根據中華人民共和國憲法，全國人民代表大會特制定中華人民共和國澳門特別行政區基本法，規定澳門特別行政區實行的制度，以保障國家對澳門的基本方針政策的實施。`;
 
-const APP_VERSION = "v1.0.0";
+const APP_VERSION = "v1.0.1";
 
 const state = {
   sourceText: normalizeText(defaultText),
