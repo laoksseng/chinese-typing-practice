@@ -278,10 +278,13 @@ button:disabled {
 
 .practice-tools {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   margin: 0 0 10px;
 }
 
+.typing-count,
 .font-size-control {
   display: flex;
   align-items: center;
@@ -291,6 +294,18 @@ button:disabled {
   font-weight: 700;
 }
 
+.typing-count strong {
+  min-width: 78px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--accent-dark);
+  background: #eef7f4;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.typing-count span,
 .font-size-control span,
 .font-size-control strong {
   white-space: nowrap;
@@ -636,11 +651,14 @@ button:disabled {
   }
 
   .practice-tools {
-    justify-content: stretch;
+    align-items: stretch;
+    flex-direction: column;
   }
 
+  .typing-count,
   .font-size-control {
     width: 100%;
+    justify-content: space-between;
   }
 
   .font-size-control input {

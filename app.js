@@ -29,6 +29,7 @@ const els = {
   progressBar: document.querySelector("#progressBar"),
   promptText: document.querySelector("#promptText"),
   typingInput: document.querySelector("#typingInput"),
+  typingCount: document.querySelector("#typingCount"),
   fontSizeInput: document.querySelector("#fontSizeInput"),
   fontSizeValue: document.querySelector("#fontSizeValue"),
   startBtn: document.querySelector("#startBtn"),
@@ -788,6 +789,7 @@ function updateMetrics() {
   els.speed.textContent = String(speed);
   els.accuracy.textContent = String(accuracy);
   els.progress.textContent = String(progress);
+  els.typingCount.textContent = `${alignment.currentIndex}/${state.sourceText.length}`;
   els.speedBar.style.width = `${Math.min(100, Math.round((speed / 120) * 100))}%`;
   els.accuracyBar.style.width = `${accuracy}%`;
   els.progressBar.style.width = `${progress}%`;

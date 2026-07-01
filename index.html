@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>中文打字練習</title>
-    <link rel="stylesheet" href="./style.css?v=20260630" />
+    <link rel="stylesheet" href="./style.css?v=20260701" />
   </head>
   <body>
     <main class="app-shell">
@@ -54,6 +54,10 @@
         </div>
 
         <div class="practice-tools" aria-label="練習顯示設定">
+          <div class="typing-count" aria-live="polite">
+            <span>已打字</span>
+            <strong id="typingCount">0/0</strong>
+          </div>
           <label class="font-size-control" for="fontSizeInput">
             <span>文章字號</span>
             <input id="fontSizeInput" type="range" min="16" max="32" step="1" value="22" />
