@@ -5,7 +5,7 @@ const defaultText =
 
 根據中華人民共和國憲法，全國人民代表大會特制定中華人民共和國澳門特別行政區基本法，規定澳門特別行政區實行的制度，以保障國家對澳門的基本方針政策的實施。`;
 
-const APP_VERSION = "v1.0.1";
+const APP_VERSION = "v1.0.2";
 
 const state = {
   sourceText: normalizeText(defaultText),
@@ -289,7 +289,6 @@ async function fetchArticleFromUrl(url) {
   const urls = [
     url,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?${encodeURIComponent(url)}`,
     `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
     `https://r.jina.ai/${url}`,
   ];
@@ -314,8 +313,10 @@ async function importArticleFromUrl(url) {
 
 async function loadPaperBrowser(url) {
   const { html, finalUrl } = await fetchHtmlFromUrl(url);
-  const paperData = parsePaperIndex(html, finalUrl);
-  els.urlInput.value = finalUrl;
+  const paperData = html.includes("Markdown Content:")
+    ? parseReaderPaperIndex(html, finalUrl)
+    : parsePaperIndex(html, finalUrl);
+  els.urlInput.value = paperData.currentUrl;
   renderPaperBrowser(paperData);
   els.paperBrowser.hidden = false;
 }
@@ -327,14 +328,18 @@ async function fetchHtmlFromUrl(url, depth = 0) {
   const sources = [
     { sourceUrl: url, baseUrl: url },
     { sourceUrl: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, baseUrl: url },
-    { sourceUrl: `https://corsproxy.io/?${encodeURIComponent(url)}`, baseUrl: url },
     { sourceUrl: `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`, baseUrl: url },
+    { sourceUrl: `https://r.jina.ai/${url}`, baseUrl: url },
   ];
 
   const promise = fetchFirstValid(sources, ({ text, baseUrl }) => {
     const refreshUrl = findMetaRefreshUrl(text, baseUrl);
     if (refreshUrl && depth < 3) return { refreshUrl };
     if (isUsablePaperHtml(text)) return { html: text, finalUrl: baseUrl };
+    if (text.includes("Markdown Content:")) {
+      const paper = parseReaderPaperIndex(text, baseUrl);
+      return { html: text, finalUrl: paper.currentUrl };
+    }
     throw new Error("未能載入電子日報頁面。");
   }).then((result) => {
     if (result.refreshUrl) return fetchHtmlFromUrl(result.refreshUrl, depth + 1);
@@ -391,6 +396,31 @@ function parsePaperIndex(html, pageUrl) {
   }
 
   return { title, currentUrl: pageUrl, articles, pages };
+}
+
+function parseReaderPaperIndex(text, pageUrl) {
+  // Reader preserves newspaper links even when the source HTML is malformed.
+  const content = text.split("Markdown Content:").slice(1).join("Markdown Content:");
+  const date = content.match(/當前報紙日期：\s*(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+  const issueBase = date
+    ? `https://www.macaodaily.com/html/${date[1]}-${date[2].padStart(2, "0")}/${date[3].padStart(2, "0")}/`
+    : pageUrl;
+  const links = [];
+  for (const match of content.matchAll(/(?<!!)\[([^\[\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g)) {
+    const title = cleanupLine(match[1]);
+    let url = match[2];
+    // The reader can resolve homepage redirects against the original root URL.
+    if (isMacauDailyUrl(url) && /^\/(?:node|content)_\d+\.htm$/.test(new URL(url).pathname)) {
+      url = new URL(new URL(url).pathname.slice(1), issueBase).href;
+    }
+    if (isMacauDailyUrl(url)) links.push({ title, url });
+  }
+  const articles = uniqueLinks(links.filter((item) => isMacauDailyArticleUrl(item.url)));
+  const pages = uniqueLinks(links.filter((item) => /^第/.test(item.title) && isMacauDailyIndexUrl(item.url)));
+  if (!pages.length) throw new Error("未能識別電子日報的版面導航。");
+  const currentUrl = isMacauDailyIndexUrl(pageUrl) ? pageUrl : pages[0].url;
+  const currentPage = pages.find((page) => normalizeUrl(page.url) === normalizeUrl(currentUrl));
+  return { title: currentPage?.title || "電子日報瀏覽", currentUrl, articles, pages };
 }
 
 function renderPaperBrowser({ title, currentUrl, articles, pages }) {
@@ -492,7 +522,7 @@ function extractPaperPageTitle(doc) {
 
 async function fetchFirstValid(items, parseResult) {
   const pending = items.map((item) => fetchSourceItem(item, parseResult));
-  let lastError = null;
+  const errors = [];
 
   while (pending.length) {
     const result = await Promise.race(
@@ -501,18 +531,18 @@ async function fetchFirstValid(items, parseResult) {
     pending.splice(result.index, 1);
 
     if (result.value.ok) return result.value.data;
-    lastError = result.value.error;
+    errors.push(result.value.error.message);
   }
 
-  throw lastError || new Error("未能讀取可用內容。");
+  throw new Error(`所有載入來源均未成功，請稍後重試或使用貼上文字導入。${[...new Set(errors)].join("；")}`);
 }
 
 async function fetchSourceItem(item, parseResult) {
   try {
     const text = await tryFetch(typeof item === "string" ? item : item.sourceUrl);
-    if (!text) throw new Error("empty response");
+    if (!text.trim()) throw new Error("來源回傳空白內容");
     const payload = typeof item === "string" ? text : { ...item, text };
-    return { ok: true, data: parseResult(payload) };
+    return { ok: true, data: await parseResult(payload) };
   } catch (error) {
     return { ok: false, error };
   }
@@ -520,14 +550,16 @@ async function fetchSourceItem(item, parseResult) {
 
 async function tryFetch(url) {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+  const timeoutId = window.setTimeout(() => controller.abort(), 15000);
 
   try {
     const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) return "";
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.text();
-  } catch {
-    return "";
+  } catch (error) {
+    const reason = error.name === "AbortError" ? "連線逾時（15 秒）"
+      : error instanceof TypeError ? "網路或跨域連線失敗" : error.message;
+    throw new Error(`${new URL(url).hostname}：${reason}`);
   } finally {
     window.clearTimeout(timeoutId);
   }
