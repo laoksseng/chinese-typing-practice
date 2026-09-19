@@ -284,6 +284,8 @@ function normalizeText(text) {
 
 async function fetchArticleFromUrl(url) {
   const cacheKey = normalizeUrl(url);
+  const saved = readImportCache(`article:${cacheKey}`);
+  if (typeof saved === "string" && saved.length >= 20) return saved;
   if (articleCache.has(cacheKey)) return articleCache.get(cacheKey);
 
   const urls = [
@@ -296,6 +298,10 @@ async function fetchArticleFromUrl(url) {
   const promise = fetchFirstValid(urls, (text) => {
     const article = extractArticleText(text);
     if (article.length < 20) throw new Error("未能讀取足夠正文。");
+    return article;
+  }).then((article) => {
+    writeImportCache(`article:${cacheKey}`, article, 24 * 60 * 60 * 1000);
+    articleCache.delete(cacheKey);
     return article;
   }).catch((error) => {
     articleCache.delete(cacheKey);
@@ -312,10 +318,7 @@ async function importArticleFromUrl(url) {
 }
 
 async function loadPaperBrowser(url) {
-  const { html, finalUrl } = await fetchHtmlFromUrl(url);
-  const paperData = html.includes("Markdown Content:")
-    ? parseReaderPaperIndex(html, finalUrl)
-    : parsePaperIndex(html, finalUrl);
+  const { paperData } = await fetchHtmlFromUrl(url);
   els.urlInput.value = paperData.currentUrl;
   renderPaperBrowser(paperData);
   els.paperBrowser.hidden = false;
@@ -323,6 +326,8 @@ async function loadPaperBrowser(url) {
 
 async function fetchHtmlFromUrl(url, depth = 0) {
   const cacheKey = normalizeUrl(url);
+  const saved = readImportCache(`paper:${cacheKey}`);
+  if (saved?.paperData && Array.isArray(saved.paperData.pages) && Array.isArray(saved.paperData.articles)) return saved;
   if (htmlCache.has(cacheKey)) return htmlCache.get(cacheKey);
 
   const sources = [
@@ -332,17 +337,22 @@ async function fetchHtmlFromUrl(url, depth = 0) {
     { sourceUrl: `https://r.jina.ai/${url}`, baseUrl: url },
   ];
 
-  const promise = fetchFirstValid(sources, ({ text, baseUrl }) => {
+  const promise = fetchFirstValid(sources, async ({ text, baseUrl }) => {
     const refreshUrl = findMetaRefreshUrl(text, baseUrl);
-    if (refreshUrl && depth < 3) return { refreshUrl };
-    if (isUsablePaperHtml(text)) return { html: text, finalUrl: baseUrl };
+    if (refreshUrl && depth < 3 && isMacauDailyUrl(refreshUrl) && normalizeUrl(refreshUrl) !== cacheKey) {
+      // A redirect is not a usable result until its destination is parsed.
+      return fetchHtmlFromUrl(refreshUrl, depth + 1);
+    }
+    if (isUsablePaperHtml(text)) return { paperData: parsePaperIndex(text, baseUrl) };
     if (text.includes("Markdown Content:")) {
-      const paper = parseReaderPaperIndex(text, baseUrl);
-      return { html: text, finalUrl: paper.currentUrl };
+      return { paperData: parseReaderPaperIndex(text, baseUrl) };
     }
     throw new Error("未能載入電子日報頁面。");
   }).then((result) => {
-    if (result.refreshUrl) return fetchHtmlFromUrl(result.refreshUrl, depth + 1);
+    const ttl = isMacauDailyHomeUrl(url) ? 2 * 60 * 1000 : 30 * 60 * 1000;
+    writeImportCache(`paper:${cacheKey}`, result, ttl);
+    writeImportCache(`paper:${normalizeUrl(result.paperData.currentUrl)}`, result, 30 * 60 * 1000);
+    htmlCache.delete(cacheKey);
     return result;
   }).catch((error) => {
     htmlCache.delete(cacheKey);
@@ -351,6 +361,34 @@ async function fetchHtmlFromUrl(url, depth = 0) {
 
   htmlCache.set(cacheKey, promise);
   return promise;
+}
+
+function readImportCache(key) {
+  try {
+    const entry = JSON.parse(window.sessionStorage.getItem(`typing-import-v1:${key}`));
+    if (entry?.expires > Date.now()) return entry.value;
+    window.sessionStorage.removeItem(`typing-import-v1:${key}`);
+  } catch {
+    // Storage can be disabled, including for local-file previews.
+  }
+  return null;
+}
+
+function writeImportCache(key, value, ttl) {
+  try {
+    const storage = window.sessionStorage;
+    const prefix = "typing-import-v1:";
+    const keys = Object.keys(storage).filter((item) => item.startsWith(prefix));
+    for (const oldKey of keys) {
+      const entry = JSON.parse(storage.getItem(oldKey));
+      if (!entry || entry.expires <= Date.now()) storage.removeItem(oldKey);
+    }
+    const remaining = Object.keys(storage).filter((item) => item.startsWith(prefix));
+    if (remaining.length >= 40) storage.removeItem(remaining[0]);
+    storage.setItem(`${prefix}${key}`, JSON.stringify({ expires: Date.now() + ttl, value }));
+  } catch {
+    // Cache failures must not prevent importing an article.
+  }
 }
 
 function findMetaRefreshUrl(text, baseUrl) {
@@ -521,25 +559,30 @@ function extractPaperPageTitle(doc) {
 }
 
 async function fetchFirstValid(items, parseResult) {
-  const pending = items.map((item) => fetchSourceItem(item, parseResult));
+  const controllers = items.map(() => new AbortController());
+  const pending = items.map((item, index) => fetchSourceItem(item, parseResult, controllers[index]));
   const errors = [];
 
-  while (pending.length) {
-    const result = await Promise.race(
-      pending.map((promise, index) => promise.then((value) => ({ index, value })))
-    );
-    pending.splice(result.index, 1);
+  try {
+    while (pending.length) {
+      const result = await Promise.race(
+        pending.map((promise, index) => promise.then((value) => ({ index, value })))
+      );
+      pending.splice(result.index, 1);
 
-    if (result.value.ok) return result.value.data;
-    errors.push(result.value.error.message);
+      if (result.value.ok) return result.value.data;
+      errors.push(result.value.error.message);
+    }
+
+    throw new Error(`所有載入來源均未成功，請稍後重試或使用貼上文字導入。${[...new Set(errors)].join("；")}`);
+  } finally {
+    controllers.forEach((controller) => controller.abort());
   }
-
-  throw new Error(`所有載入來源均未成功，請稍後重試或使用貼上文字導入。${[...new Set(errors)].join("；")}`);
 }
 
-async function fetchSourceItem(item, parseResult) {
+async function fetchSourceItem(item, parseResult, controller) {
   try {
-    const text = await tryFetch(typeof item === "string" ? item : item.sourceUrl);
+    const text = await tryFetch(typeof item === "string" ? item : item.sourceUrl, controller);
     if (!text.trim()) throw new Error("來源回傳空白內容");
     const payload = typeof item === "string" ? text : { ...item, text };
     return { ok: true, data: await parseResult(payload) };
@@ -548,8 +591,7 @@ async function fetchSourceItem(item, parseResult) {
   }
 }
 
-async function tryFetch(url) {
-  const controller = new AbortController();
+async function tryFetch(url, controller = new AbortController()) {
   const timeoutId = window.setTimeout(() => controller.abort(), 15000);
 
   try {
